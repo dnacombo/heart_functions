@@ -1,14 +1,14 @@
-function [beats, beats_time] = heart_peak_detect(cfg,data)
+function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 
-% [beats, beats_time] = heart_peak_detection(ECG,fs)
+% [R_sample, R_time] = heart_peak_detection(ECG,fs)
 %
 % Detect R peaks in ECG data sampled at fs Hz.
 % Inputs:
 %       ECG         vector of ECG data
 %       fs          sampling frequency
 % Outputs:
-%       beats       samples where beats have been detected.
-%       beats_time  time points where beats have been detected (assuming
+%       R_sample    samples where beats have been detected.
+%       R_time      time points where beats have been detected (assuming
 %                   time starts at 0)
 %
 % [HeartBeats] = heart_peak_detect(cfg)
@@ -21,9 +21,13 @@ function [beats, beats_time] = heart_peak_detect(cfg,data)
 %   cfg.channel      = the one channel to be read and taken as ECG channel
 %
 % If you are calling heart_peak_detect with also the second input argument
-% "data", then that should contain data that was already read from file in
-% a previous call to FT_PREPROCESSING. In that case only the configuration
-% options below apply.
+% "data", then that should either
+%   - be a vector of ECG data points. first input cfg.fsample should
+%   contain sampling frequency in this case.
+%   - contain data that was read from file in a previous call to
+%   FT_PREPROCESSING.
+%
+% In either case, the configuration options below apply.
 %
 % 
 % The options are specified with
@@ -42,6 +46,7 @@ function [beats, beats_time] = heart_peak_detect(cfg,data)
 %     cfg.plotthresh      = open a figure to modify the threshold (default = 'no')
 %     cfg.plotbeat        = open a figure to show the average ECG around R peak (default = 'no')
 %     cfg.plotcorr        = open a figure to show the correlation level along the recording and enable editing threshold correlation (default = 'no')
+%     cfg.plotfinal       = open a figure to show final results with all peaks found (default = 'no')
 %     cfg.plotall         = whether to do all of the above (default = 'no')
 %
 %
@@ -69,9 +74,12 @@ function [beats, beats_time] = heart_peak_detect(cfg,data)
 
 narginchk(1,2)
 structoutput = 0;
-if nargin == 2 && isnumeric(cfg) && isnumeric(data)
+if isnumeric(cfg) % first input method
     if not(isvector(cfg))
         error('ECG should be a one channel vector of data');
+    end
+    if not(exist('data','var'))
+        error('Please provide sampling rate');
     end
     fs = data;
     data = [];
@@ -80,32 +88,41 @@ if nargin == 2 && isnumeric(cfg) && isnumeric(data)
     data.trial = {cfg(:)'};
     data.time = {linspace(0,size(data.trial{1},2)/cfg.fsample,size(data.trial{1},2))};
     cfg = [];
-elseif nargin == 1 && isstruct(cfg) && isstruct(ft_checkopt(cfg,'dataset','string'))
-    data = ft_preprocessing(cfg);
-elseif nargin == 2 && isnumeric(cfg) && isstruct(data) && isstruct(ft_checkopt(data,'fsample','double'))
-    tmp = cfg;cfg = data;
-    if not(isvector(tmp))
-        error('ECG should be a one channel vector of data');
-    end
-    data = [];
-    data.fsample = cfg.fsample;
-    data.label = {'ECG'};
-    data.trial = {tmp(:)'};
-    data.time = {linspace(0,size(data.trial{1},2)/cfg.fsample,size(data.trial{1},2))};
-elseif nargin == 2 && isstruct(cfg) && isstruct(data) && isstruct(ft_checkdata(data,'raw'))
+elseif isstruct(cfg) % second input method
     structoutput = 1;
+    if nargin == 1 
+        data = ft_preprocessing(cfg);
+    elseif nargin == 2
+        if isnumeric(data)% data input as vector
+            if ~isvector(data)
+                error('ECG should be a one channel vector of data');
+            end
+            if ~isstruct(ft_checkopt(cfg,'fsample','double'))
+                error('Please provide sampling frequency in cfg.fsample')
+            end
+            tmp = data;
+            data = [];
+            data.fsample = cfg.fsample;
+            data.label = {'ECG'};
+            data.trial = {tmp(:)'};
+            data.time = {linspace(0,size(data.trial{1},2)/cfg.fsample,size(data.trial{1},2))};
+        elseif isstruct(ft_checkdata(data,'datatype','raw'))
+            if isfield(cfg,'channel')
+                data = ft_preprocessing(cfg,data);
+            end
+            if not(isvector(data.trial{1}))
+                error('Channel should be specified')
+            end
+        end
+    end
 else
-    error('Wrong input');
+    error('Bad input');
 end
 if nargout == 2
     structoutput = 0;
 end
 
-ECG = data.trial{1};
-if not(isvector(ECG))
-    error('ECG input should be a vector or channel should be specified')
-end
-
+data_in = data;
 
 def = [];
 def.downsample      = 'yes';% downsample?
@@ -119,9 +136,9 @@ def.plotall         = 0;
 def.plotthresh      = 0;
 def.plotbeat        = 0;
 def.plotcorr        = 0;
+def.plotfinal       = 0;
 
 cfg = setdef(cfg,def);
-
 
 
 fsample_ori = data.fsample;
@@ -132,28 +149,29 @@ if istrue(cfg.downsample)
     tmp.detrend = 'yes';
     tmp.demean = 'yes';
     [data] = ft_resampledata(tmp,data);
-    cfg.fsample = data.fsample;
 end
-
+cfg.fsample = data.fsample;
 
 tmp             = [];
 tmp.hpfilter    = cfg.hpfilter;
 tmp.hpfreq      = cfg.hpfreq;
 data            = ft_preprocessing(tmp,data);
 
-%% Here we use a threshold  z-score method to find the R-peaks
+ECG = data.trial{1};
+time = data.time{1};
+
+%% find R peaks
 
 % standardize ecg
-ECG = data.trial{1};
 ECG2z = nanzscore(ECG).^2;
 
 thresh = cfg.thresh; % default z-threshold
-[beats, v] = peakdetect2(ECG2z, thresh, cfg.fsample .* cfg.mindist);
+[R_sample, R_value] = peakseek(ECG2z, thresh, cfg.fsample .* cfg.mindist);
 while istrue(cfg.plotthresh) || istrue(cfg.plotall)
     figure(47894);clf
     plot(ECG2z);
     hold on;
-    scatter(beats,v);
+    scatter(R_sample,R_value);
     hline(thresh,':r');
     xlabel('samples');
     ylabel('zscore');
@@ -166,27 +184,26 @@ while istrue(cfg.plotthresh) || istrue(cfg.plotall)
         break
     else
         thresh = y;
-        [beats, v] = peakdetect2(ECG2z, thresh, cfg.fsample .* cfg.mindist);
+        [R_sample, R_value] = peakseek(ECG2z, thresh, cfg.fsample .* cfg.mindist);
     end
 end
-
 
 
 %% We now build the template and compute the correlation with the ecg channel
 
 % build template based on identified r-peaks
 HB_bound = round(.5 * cfg.fsample);
-HB = NaN(numel(beats),2*HB_bound+1);
-for ii=1:length(beats)
-    if beats(ii)-HB_bound > 1 && beats(ii)+HB_bound < length(ECG)
-        HB(ii,:) = ECG(beats(ii)-HB_bound:beats(ii)+HB_bound);
+HB = NaN(numel(R_sample),2*HB_bound+1);
+for ii=1:length(R_sample)
+    if R_sample(ii)-HB_bound > 1 && R_sample(ii)+HB_bound < length(ECG)
+        HB(ii,:) = ECG(R_sample(ii)-HB_bound:R_sample(ii)+HB_bound);
     end
 end
 
 mHB = nanmean(HB,1);
 
 % we'll assume that signal at dt seconds before detected R-peaks should be
-% lower than R-peaks. 50 ms seems reasonable.
+% lower than R-peaks. dt = 50 ms seems reasonable.
 dt = round(.05 * cfg.fsample);
 if ~(mean(mHB(HB_bound-5:HB_bound+5)) > mean(mHB(HB_bound - dt:HB_bound - dt + 10)))
     % flip
@@ -228,16 +245,16 @@ cr = cr./max(cr); % normalize correlation to 1
 
 % find peaks in correlation
 thresh = cfg.corthresh;
-[beats, v] = peakdetect2(cr(1001:end-1000), thresh, cfg.fsample .* cfg.mindist);
+[R_sample, R_value] = peakseek(cr(1001:end-1000), thresh, cfg.fsample .* cfg.mindist);
 
 while istrue(cfg.plotcorr) || istrue(cfg.plotall)
-    IBI_s = diff(beats)/cfg.fsample;
-    plotIBI(ecg_n,cr,beats,v,thresh,IBI_s);
+    IBI_s = diff(R_sample)/cfg.fsample;
+    plotIBI(ecg_n,cr,R_sample,R_value,thresh,IBI_s);
     s1 = questdlg('Would you like to change the threshold?');
     switch s1
         case 'Yes'
             [dum,thresh] = ginput(1);
-            [beats, v] = peakdetect2(cr(1001:end-1000), thresh, cfg.fsample .* cfg.mindist);
+            [R_sample, R_value] = peakseek(cr(1001:end-1000), thresh, cfg.fsample .* cfg.mindist);
         case 'No'
             break
         case 'Cancel'
@@ -245,7 +262,7 @@ while istrue(cfg.plotcorr) || istrue(cfg.plotall)
     end
 end
 while istrue(cfg.plotcorr) || istrue(cfg.plotall)
-    plotIBI(ecg_n,cr,beats,v,thresh,IBI_s);
+    plotIBI(ecg_n,cr,R_sample,R_value,thresh,IBI_s);
     
     s2 = questdlg('Are there still outliers present? ');
     switch s2
@@ -257,13 +274,13 @@ while istrue(cfg.plotcorr) || istrue(cfg.plotall)
             [hg,~] = ginput(1);
             % find outlier peaks
             IBI_out = IBI_s < lw | IBI_s > hg;
-            for ii = beats(IBI_out)
+            for ii = R_sample(IBI_out)
                 while istrue(cfg.plotcorr) || istrue(cfg.plotall)
                     h = figure(478490);clf;
                     plot(ecg_n);
                     hold on
                     %                     plot(cr(1001:end-1000),'r')
-                    scatter(beats,ecg_n(beats))
+                    scatter(R_sample,ecg_n(R_sample))
                     xlim([ii-500 ii+500]);
                     xlabel('samples')
                     ylabel('a.u.')
@@ -277,11 +294,11 @@ while istrue(cfg.plotcorr) || istrue(cfg.plotall)
                         X = [1:numel(ecg_n);ecg_n*numel(ecg_n)]';
                         [closest] = dsearchn(X,[x y*numel(ecg_n)]);
                         scatter(closest,ecg_n(closest))
-                        beats(end+1) = closest; beats = sort(beats);
+                        R_sample(end+1) = closest; R_sample = sort(R_sample);
                     else
                         % find closest detected peak
-                        [dum,closest] = min(abs(beats-x));
-                        beats(closest) = [];
+                        [dum,closest] = min(abs(R_sample-x));
+                        R_sample(closest) = [];
                     end
                 end
             end
@@ -292,17 +309,110 @@ while istrue(cfg.plotcorr) || istrue(cfg.plotall)
             break
     end
 end
-close
-if istrue(cfg.downsample)
-    beats = round(beats*fsample_ori/cfg.fsample);
-end
-
-beats_time = beats / fsample_ori;
 
 if structoutput
-    beats = struct('R_sample',beats,'R_time',beats_time);
+    %% find Q and S
+    [p,v] = peakseek(-ECG,-Inf,.1*cfg.fsample);
+    tmp = bsxfun(@minus,R_sample(:),p);
+    % wipe all peaks further than 400 ms to be sure we don't skip a beat
+    tmp(abs(tmp)/cfg.fsample>.4) = NaN;
+    
+    Q_sample = NaN(size(R_sample));S_sample = NaN(size(R_sample));
+    for i_R = 1:size(tmp,1)
+        try
+            Q_sample(i_R) = p(find(tmp(i_R,:) > 0,1,'last'));
+            S_sample(i_R) = p(find(tmp(i_R,:) < 0,1,'first'));
+        end
+    end
+    %% find T
+    [p,v] = peakseek(ECG,-Inf,.1*cfg.fsample);
+    tmp = bsxfun(@minus,S_sample(:),p);
+    % wipe all peaks further than 400 ms
+    tmp(abs(tmp)/cfg.fsample>.4) = NaN;
+    
+    T_sample = NaN(size(R_sample));
+    for i_R = 1:size(tmp,1)
+        try
+            T_sample(i_R) = p(find(tmp(i_R,:) < 0,1,'first'));
+        end
+    end
+    %% find P
+    [p,v] = peakseek(ECG,-Inf,.1*cfg.fsample);
+    tmp = bsxfun(@minus,Q_sample(:),p);
+    % wipe all peaks further than 400 ms
+    tmp(abs(tmp)/cfg.fsample>.4 | abs(tmp)/cfg.fsample<.1) = NaN;
+    
+    P_sample = NaN(size(R_sample));
+    for i_R = 1:size(tmp,1)
+        try
+            P_sample(i_R) = p(find(tmp(i_R,:) > 0,1,'last'));
+        end
+    end
+    
+    P_sample = floor(P_sample*fsample_ori/cfg.fsample);
+    Q_sample = floor(Q_sample*fsample_ori/cfg.fsample);
+    R_sample = floor(R_sample*fsample_ori/cfg.fsample);
+    S_sample = floor(S_sample*fsample_ori/cfg.fsample);
+    T_sample = floor(T_sample*fsample_ori/cfg.fsample);
+    
+    P_time = skipnans(data_in.time{1},P_sample);
+    Q_time = skipnans(data_in.time{1},Q_sample);
+    R_time = skipnans(data_in.time{1},R_sample);
+    S_time = skipnans(data_in.time{1},S_sample);
+    T_time = skipnans(data_in.time{1},T_sample);
+    
+    [HeartBeats.P_sample] = rep2struct(P_sample);
+    [HeartBeats.P_time] = rep2struct(P_time);
+    [HeartBeats.Q_sample] = rep2struct(Q_sample);
+    [HeartBeats.Q_time] = rep2struct(Q_time);
+    [HeartBeats.R_sample] = rep2struct(R_sample);
+    [HeartBeats.R_time] = rep2struct(R_time);
+    [HeartBeats.S_sample] = rep2struct(S_sample);
+    [HeartBeats.S_time] = rep2struct(S_time);
+    [HeartBeats.T_sample] = rep2struct(T_sample);
+    [HeartBeats.T_time] = rep2struct(T_time);
+    if istrue(cfg.plotfinal) || istrue(cfg.plotall)
+        figure;
+        hold on
+        set(gca,'colororder',[0         0    1.0000
+            0    0.5000         0
+            0.8000         0         0
+            0    0.7500    0.7500
+            0.7500         0    0.7500]);
+        
+        plot(data_in.time{1},data_in.trial{1},'k');
+        
+        todel = isnan(P_sample);
+        toplot = [P_time(~todel); data_in.trial{1}(P_sample(~todel))];
+        plot(toplot(1,:),toplot(2,:),'.');
+        todel = isnan(Q_sample);
+        toplot = [Q_time(~todel); data_in.trial{1}(Q_sample(~todel))];
+        plot(toplot(1,:),toplot(2,:),'.');
+        todel = isnan(R_sample);
+        toplot = [R_time(~todel); data_in.trial{1}(R_sample(~todel))];
+        plot(toplot(1,:),toplot(2,:),'.');
+        todel = isnan(S_sample);
+        toplot = [S_time(~todel); data_in.trial{1}(S_sample(~todel))];
+        plot(toplot(1,:),toplot(2,:),'.');
+        todel = isnan(T_sample);
+        toplot = [T_time(~todel); data_in.trial{1}(T_sample(~todel))];
+        plot(toplot(1,:),toplot(2,:),'.');
+        legend({'ECG','P','Q','R','S','T'});
+    end
+    clear beats_time
+else
+    HeartBeats = R_sample;
 end
 
+function [b] = skipnans(a,idx)
+
+b = NaN(size(idx));
+for i = 1:numel(idx)
+    if ~isnan(idx(i))
+        b(i) = a(idx(i));
+    end
+end
+        
 
 function plotIBI(ecg_n,cr,p,v,thresh,IBI_s)
 figure(47894);clf
@@ -387,70 +497,6 @@ end
 
 
 
-function [p, v] = toto(dat, val, mindist)
-
-% PEAKDETECT2 detects peaks above a certain threshold in single-channel data
-%
-% Use as
-%   [pindx, pval] = peakdetect(signal, min, mindist)
-%
-% mindist is optional, default is 1
-%
-% See also PEAKDETECT, PEAKDETECT3
-
-% Copyright (C) 2000, Robert Oostenveld
-%
-% This file is part of FieldTrip, see http://www.ru.nl/neuroimaging/fieldtrip
-% for the documentation and details.
-%
-%    FieldTrip is free software: you can redistribute it and/or modify
-%    it under the terms of the GNU General Public License as published by
-%    the Free Software Foundation, either version 3 of the License, or
-%    (at your option) any later version.
-%
-%    FieldTrip is distributed in the hope that it will be useful,
-%    but WITHOUT ANY WARRANTY; without even the implied warranty of
-%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-%    GNU General Public License for more details.
-%
-%    You should have received a copy of the GNU General Public License
-%    along with FieldTrip. If not, see <http://www.gnu.org/licenses/>.
-%
-% $Id: peakdetect2.m 952 2010-04-21 18:29:51Z roboos $
-
-
-
-% if nargin<3
-%   mindist=1;
-% end
-
-i = find(dat>val);
-m = dat(i);
-d = diff(i);
-jump = (d>mindist);
-p = [];
-
-sect=1;
-while sect<=length(d)
-  if jump(sect)
-    p = [p i(sect)];
-  else
-    s = [];
-    while ~jump(sect) & sect<length(d)
-      s = [s sect];
-      sect = sect + 1;
-    end
-    [lm, li] = max(m(s));
-    p = [p i(s(li))];
-  end
-  sect = sect+1;
-end
-
-if nargout>1
-  v = dat(p);
-end
-
-
 function [z,mu,sigma] = nanzscore(x,flag,dim)
 
 % [] is a special case for std and mean, just handle it out here.
@@ -473,8 +519,8 @@ z(inan) = ztmp;
 
 
 
-function [locs, pks]=peakdetect2(x,minpeakh,minpeakdist)
-% [locs, pks]=peakseek(x,minpeakdist,minpeakh)
+function [locs, pks]=peakseek(x,minpeakh,minpeakdist)
+% [locs, pks]=peakseek(x,minpeakh,minpeakdist)
 % Alternative to the findpeaks function.  This thing runs much much faster.
 % It really leaves findpeaks in the dust.  It also can handle ties between
 % peaks.  Findpeaks just erases both in a tie.  Shame on findpeaks.
