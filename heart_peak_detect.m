@@ -86,7 +86,7 @@ if isnumeric(cfg) % first input method
     data.fsample = fs;
     data.label = {'ECG'};
     data.trial = {cfg(:)'};
-    data.time = {linspace(0,size(data.trial{1},2)/cfg.fsample,size(data.trial{1},2))};
+    data.time = {linspace(0,size(data.trial{1},2)/fs,size(data.trial{1},2))};
     cfg = [];
 elseif isstruct(cfg) % second input method
     structoutput = 1;
