@@ -349,11 +349,11 @@ if structoutput
         end
     end
     
-    P_sample = floor(P_sample*fsample_ori/cfg.fsample);
-    Q_sample = floor(Q_sample*fsample_ori/cfg.fsample);
-    R_sample = floor(R_sample*fsample_ori/cfg.fsample);
-    S_sample = floor(S_sample*fsample_ori/cfg.fsample);
-    T_sample = floor(T_sample*fsample_ori/cfg.fsample);
+    P_sample = round(P_sample*fsample_ori/cfg.fsample);
+    Q_sample = round(Q_sample*fsample_ori/cfg.fsample);
+    R_sample = round(R_sample*fsample_ori/cfg.fsample);
+    S_sample = round(S_sample*fsample_ori/cfg.fsample);
+    T_sample = round(T_sample*fsample_ori/cfg.fsample);
     
     P_time = skipnans(data_in.time{1},P_sample);
     Q_time = skipnans(data_in.time{1},Q_sample);
@@ -401,7 +401,7 @@ if structoutput
     end
     clear beats_time
 else
-    HeartBeats = R_sample;
+    HeartBeats = round(R_sample*fsample_ori/cfg.fsample);
 end
 
 function [b] = skipnans(a,idx)
