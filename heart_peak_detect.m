@@ -35,6 +35,7 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 %     cfg.downsample      = 'no' or 'yes'  downsample the data to a specified rate (default = 'yes') 
 %     cfg.downrate        = down-sampling rate (default = 300)
 %     cfg.hpfilter        = 'no' or 'yes'  highpass filter (default = 'yes')
+%     cfg.hpfilttpye      = filter type (see ft_preprocessing, default = 'firws')
 %     cfg.hpfreq          = highpass frequency in Hz (default = 1);
 %
 %   - Algorithm options (see description below):
@@ -129,6 +130,7 @@ def.downsample      = 'yes';% downsample?
 def.downrate        = 300;  % down-sampling rate
 def.hpfilter        = 'yes';
 def.hpfreq          = 1;    % low bound of high pass filter of ECG
+def.hpfilttype      = 'firws';
 def.thresh          = 10;    % z-threshold for 1st step detection of R-peaks
 def.mindist         = 0.35; % minimum IBI
 def.corthresh       = 0.6;  % proportion of maximum correlation
@@ -155,6 +157,7 @@ cfg.fsample = data.fsample;
 tmp             = [];
 tmp.hpfilter    = cfg.hpfilter;
 tmp.hpfreq      = cfg.hpfreq;
+tmp.hpfilttype= cfg.hpfilttype;
 data            = ft_preprocessing(tmp,data);
 
 ECG = data.trial{1};
