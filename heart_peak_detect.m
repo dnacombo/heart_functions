@@ -318,16 +318,19 @@ if cfg.structoutput
     %% find Q S T
     Q_sample = NaN(size(R_sample));S_sample = NaN(size(R_sample));T_sample = NaN(size(R_sample));
     for i_R = 1:numel(R_sample)
-        ECGtmp = ECG(R_sample(i_R) - cfg.QRmax * data.fsample:R_sample(i_R));
+        bnds = max(1,round(R_sample(i_R) - cfg.QRmax * data.fsample)):R_sample(i_R);
+        ECGtmp = ECG(bnds);
         [v,p] = min(ECGtmp);
-        Q_sample(i_R) = p + R_sample(i_R) - cfg.QRmax * data.fsample - 1;
-        ECGtmp = ECG(R_sample(i_R):R_sample(i_R) +  cfg.RSmax * data.fsample);
+        Q_sample(i_R) = p + bnds(1) - 1;
+        bnds = R_sample(i_R):min(numel(ECG),round(R_sample(i_R) +  cfg.RSmax * data.fsample));
+        ECGtmp = ECG(bnds);
         [v,p] = min(ECGtmp);
-        S_sample(i_R) = p + R_sample(i_R) - 1;
+        S_sample(i_R) = p + bnds(1) - 1;
         QTmax = 0.42;
-        ECGtmp = ECG(S_sample(i_R):Q_sample(i_R)+cfg.QTmax*data.fsample);
+        bnds = S_sample(i_R):min(numel(ECG),round(Q_sample(i_R)+cfg.QTmax*data.fsample));
+        ECGtmp = ECG(bnds);
         [v,p] = max(ECGtmp);
-        T_sample(i_R) = S_sample(i_R) + p - 1;
+        T_sample(i_R) = p + bnds(1) - 1;
     end
     Q_time = skipnans(data_in.time{1},Q_sample);
     R_time = skipnans(data_in.time{1},R_sample);
