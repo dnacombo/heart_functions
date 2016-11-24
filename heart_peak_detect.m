@@ -32,16 +32,20 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 % 
 % The options are specified with
 %   - Preprocessing options:
-%     cfg.downsample      = 'no' or 'yes'  downsample the data to a specified rate (default = 'yes') 
-%     cfg.downrate        = down-sampling rate (default = 300)
 %     cfg.hpfilter        = 'no' or 'yes'  highpass filter (default = 'yes')
 %     cfg.hpfilttpye      = filter type (see ft_preprocessing, default = 'firws')
 %     cfg.hpfreq          = highpass frequency in Hz (default = 1);
+%     cfg.lpfilter        = 'no' or 'yes'  lowpass filter (default = 'yes')
+%     cfg.lpfilttpye      = filter type (see ft_preprocessing, default = 'firws')
+%     cfg.lpfreq          = lowpass frequency in Hz (default = 100);
 %
 %   - Algorithm options (see description below):
 %     cfg.thresh          = z-threshold for 1st step detection of R-peaks (default = 10)
 %     cfg.mindist         = minimum inter beat interval in seconds (IBI) (default = 0.35)
 %     cfg.corthresh       = proportion of maximum correlation (default = 0.6)
+%     cfg.QRmax           = maximum duration between Q and R peaks in seconds (default = 0.05)
+%     cfg.RSmax           = maxumum duration between R and S peaks in seconds (default = 0.1)
+%     cfg.QTmax           = maximum QT interval in seconds (default = 0.42)
 %
 %   - Plotting options:
 %     cfg.plotthresh      = open a figure to modify the threshold (default = 'no')
@@ -50,15 +54,13 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 %     cfg.plotfinal       = open a figure to show final results with all peaks found (default = 'no')
 %     cfg.plotall         = whether to do all of the above (default = 'no')
 %
-%
-%
 %   Algorithm:
 %
-%   The signal is first resampled and high pass filtered. The square of the
-%   z-scored ECG is computed and a first detection is performed as the
-%   peaks passing the cfg.thresh. Not all R peaks need to be selected at
-%   this step. Just enough to create a template heart beat ECG (HB) is
-%   necessary.
+%   The signal is first high and low pass filtered (default 1-100 Hz). The
+%   square of the z-scored ECG is computed and a first detection is
+%   performed as the peaks passing the cfg.thresh. Not all R peaks need to
+%   be selected at this step. Just enough to create a template heart beat
+%   ECG (HB) is necessary.
 %   If cfg.plotthresh is true, then a figure is shown, allowing the user to
 %   edit the threshold.
 %   Then a template HB is computed (shown in a figure if cfg.plotbeat) and
@@ -67,14 +69,16 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 %   cfg.corthresh.
 %   In both steps, a minimum distance between beats of cfg.mindist is
 %   enforced.
-%   
+%   Other peaks are found based on each R peak. Q is the minimum within 50
+%   ms before R, S is the minimum within 100 ms after R, and T is the
+%   maximum between the S peak and a maximum QT interval of 420 ms (a rough
+%   standard...).
 %  
 
 % v0 Maximilien Chaumon November 2016
 % based on previously undocumented anonymous version
 
 narginchk(1,2)
-structoutput = 0;
 if isnumeric(cfg) % first input method
     if not(isvector(cfg))
         error('ECG should be a one channel vector of data');
@@ -89,8 +93,8 @@ if isnumeric(cfg) % first input method
     data.trial = {cfg(:)'};
     data.time = {linspace(0,size(data.trial{1},2)/fs,size(data.trial{1},2))};
     cfg = [];
+    cfg.structouput = 0;
 elseif isstruct(cfg) % second input method
-    structoutput = 1;
     if nargin == 1 
         data = ft_preprocessing(cfg);
     elseif nargin == 2
@@ -106,7 +110,8 @@ elseif isstruct(cfg) % second input method
             data.fsample = cfg.fsample;
             data.label = {'ECG'};
             data.trial = {tmp(:)'};
-            data.time = {linspace(0,size(data.trial{1},2)/cfg.fsample,size(data.trial{1},2))};
+            data.time = {linspace(0,size(data.trial{1},2)/data.fsample,size(data.trial{1},2))};
+            cfg = rmfield(cfg,'fsample');
         elseif isstruct(ft_checkdata(data,'datatype','raw'))
             if isfield(cfg,'channel')
                 data = ft_preprocessing(cfg,data);
@@ -119,21 +124,23 @@ elseif isstruct(cfg) % second input method
 else
     error('Bad input');
 end
-if nargout == 2
-    structoutput = 0;
-end
 
 data_in = data;
 
 def = [];
-def.downsample      = 'yes';% downsample?
-def.downrate        = 300;  % down-sampling rate
 def.hpfilter        = 'yes';
 def.hpfreq          = 1;    % low bound of high pass filter of ECG
 def.hpfilttype      = 'firws';
+def.lpfilter        = 'yes';
+def.lpfilttype      = 'firws';
+def.lpfreq          = 100;
 def.thresh          = 10;    % z-threshold for 1st step detection of R-peaks
 def.mindist         = 0.35; % minimum IBI
 def.corthresh       = 0.6;  % proportion of maximum correlation
+def.QRmax           = 0.05;  
+def.RSmax           = 0.1;
+def.QTmax           = 0.42;
+def.structoutput    = 1; 
 def.plotall         = 0;
 def.plotthresh      = 0;
 def.plotbeat        = 0;
@@ -142,22 +149,16 @@ def.plotfinal       = 0;
 
 cfg = setdef(cfg,def);
 
-
-fsample_ori = data.fsample;
-
-if istrue(cfg.downsample)
-    tmp = [];
-    tmp.resamplefs = cfg.downrate;
-    tmp.detrend = 'yes';
-    tmp.demean = 'yes';
-    [data] = ft_resampledata(tmp,data);
+if cfg.lpfreq > data.fsample/2
+    error(['Lowpass filter frequency too high. Set cfg.lpfreq below ' num2str(data.fsample/2)])
 end
-cfg.fsample = data.fsample;
-
 tmp             = [];
 tmp.hpfilter    = cfg.hpfilter;
 tmp.hpfreq      = cfg.hpfreq;
-tmp.hpfilttype= cfg.hpfilttype;
+tmp.hpfilttype  = cfg.hpfilttype;
+tmp.lpfilter    = cfg.lpfilter;
+tmp.lpfreq      = cfg.lpfreq;
+tmp.lpfilttype  = cfg.lpfilttype;
 data            = ft_preprocessing(tmp,data);
 
 ECG = data.trial{1};
@@ -169,7 +170,7 @@ time = data.time{1};
 ECG2z = nanzscore(ECG).^2;
 
 thresh = cfg.thresh; % default z-threshold
-[R_sample, R_value] = peakseek(ECG2z, thresh, cfg.fsample .* cfg.mindist);
+[R_sample, R_value] = peakseek(ECG2z, thresh, data.fsample .* cfg.mindist);
 while istrue(cfg.plotthresh) || istrue(cfg.plotall)
     figure(47894);clf
     plot(ECG2z);
@@ -187,7 +188,7 @@ while istrue(cfg.plotthresh) || istrue(cfg.plotall)
         break
     else
         thresh = y;
-        [R_sample, R_value] = peakseek(ECG2z, thresh, cfg.fsample .* cfg.mindist);
+        [R_sample, R_value] = peakseek(ECG2z, thresh, data.fsample .* cfg.mindist);
     end
 end
 
@@ -195,7 +196,7 @@ end
 %% We now build the template and compute the correlation with the ecg channel
 
 % build template based on identified r-peaks
-HB_bound = round(.5 * cfg.fsample);
+HB_bound = round(.5 * data.fsample);
 HB = NaN(numel(R_sample),2*HB_bound+1);
 for ii=1:length(R_sample)
     if R_sample(ii)-HB_bound > 1 && R_sample(ii)+HB_bound < length(ECG)
@@ -207,7 +208,7 @@ mHB = nanmean(HB,1);
 
 % we'll assume that signal at dt seconds before detected R-peaks should be
 % lower than R-peaks. dt = 50 ms seems reasonable.
-dt = round(.05 * cfg.fsample);
+dt = round(.05 * data.fsample);
 if ~(mean(mHB(HB_bound-5:HB_bound+5)) > mean(mHB(HB_bound - dt:HB_bound - dt + 10)))
     % flip
     ECG = -ECG;
@@ -248,16 +249,16 @@ cr = cr./max(cr); % normalize correlation to 1
 
 % find peaks in correlation
 thresh = cfg.corthresh;
-[R_sample, R_value] = peakseek(cr(1001:end-1000), thresh, cfg.fsample .* cfg.mindist);
+[R_sample, R_value] = peakseek(cr(1001:end-1000), thresh, data.fsample .* cfg.mindist);
 
 while istrue(cfg.plotcorr) || istrue(cfg.plotall)
-    IBI_s = diff(R_sample)/cfg.fsample;
+    IBI_s = diff(R_sample)/data.fsample;
     plotIBI(ecg_n,cr,R_sample,R_value,thresh,IBI_s);
     s1 = questdlg('Would you like to change the threshold?');
     switch s1
         case 'Yes'
             [dum,thresh] = ginput(1);
-            [R_sample, R_value] = peakseek(cr(1001:end-1000), thresh, cfg.fsample .* cfg.mindist);
+            [R_sample, R_value] = peakseek(cr(1001:end-1000), thresh, data.fsample .* cfg.mindist);
         case 'No'
             break
         case 'Cancel'
@@ -313,59 +314,26 @@ while istrue(cfg.plotcorr) || istrue(cfg.plotall)
     end
 end
 
-if structoutput
-    %% find Q and S
-    [p,v] = peakseek(-ECG,-Inf,.1*cfg.fsample);
-    tmp = bsxfun(@minus,R_sample(:),p);
-    % wipe all peaks further than 400 ms to be sure we don't skip a beat
-    tmp(abs(tmp)/cfg.fsample>.4) = NaN;
-    
-    Q_sample = NaN(size(R_sample));S_sample = NaN(size(R_sample));
-    for i_R = 1:size(tmp,1)
-        try
-            Q_sample(i_R) = p(find(tmp(i_R,:) > 0,1,'last'));
-            S_sample(i_R) = p(find(tmp(i_R,:) < 0,1,'first'));
-        end
+if cfg.structoutput
+    %% find Q S T
+    Q_sample = NaN(size(R_sample));S_sample = NaN(size(R_sample));T_sample = NaN(size(R_sample));
+    for i_R = 1:numel(R_sample)
+        ECGtmp = ECG(R_sample(i_R) - cfg.QRmax * data.fsample:R_sample(i_R));
+        [v,p] = min(ECGtmp);
+        Q_sample(i_R) = p + R_sample(i_R) - cfg.QRmax * data.fsample - 1;
+        ECGtmp = ECG(R_sample(i_R):R_sample(i_R) +  cfg.RSmax * data.fsample);
+        [v,p] = min(ECGtmp);
+        S_sample(i_R) = p + R_sample(i_R) - 1;
+        QTmax = 0.42;
+        ECGtmp = ECG(S_sample(i_R):Q_sample(i_R)+cfg.QTmax*data.fsample);
+        [v,p] = max(ECGtmp);
+        T_sample(i_R) = S_sample(i_R) + p - 1;
     end
-    %% find T
-    [p,v] = peakseek(ECG,-Inf,.1*cfg.fsample);
-    tmp = bsxfun(@minus,S_sample(:),p);
-    % wipe all peaks further than 400 ms
-    tmp(abs(tmp)/cfg.fsample>.4) = NaN;
-    
-    T_sample = NaN(size(R_sample));
-    for i_R = 1:size(tmp,1)
-        try
-            T_sample(i_R) = p(find(tmp(i_R,:) < 0,1,'first'));
-        end
-    end
-    %% find P
-    [p,v] = peakseek(ECG,-Inf,.1*cfg.fsample);
-    tmp = bsxfun(@minus,Q_sample(:),p);
-    % wipe all peaks further than 400 ms
-    tmp(abs(tmp)/cfg.fsample>.4 | abs(tmp)/cfg.fsample<.1) = NaN;
-    
-    P_sample = NaN(size(R_sample));
-    for i_R = 1:size(tmp,1)
-        try
-            P_sample(i_R) = p(find(tmp(i_R,:) > 0,1,'last'));
-        end
-    end
-    
-    P_sample = round(P_sample*fsample_ori/cfg.fsample);
-    Q_sample = round(Q_sample*fsample_ori/cfg.fsample);
-    R_sample = round(R_sample*fsample_ori/cfg.fsample);
-    S_sample = round(S_sample*fsample_ori/cfg.fsample);
-    T_sample = round(T_sample*fsample_ori/cfg.fsample);
-    
-    P_time = skipnans(data_in.time{1},P_sample);
     Q_time = skipnans(data_in.time{1},Q_sample);
     R_time = skipnans(data_in.time{1},R_sample);
     S_time = skipnans(data_in.time{1},S_sample);
     T_time = skipnans(data_in.time{1},T_sample);
     
-    [HeartBeats.P_sample] = rep2struct(P_sample);
-    [HeartBeats.P_time] = rep2struct(P_time);
     [HeartBeats.Q_sample] = rep2struct(Q_sample);
     [HeartBeats.Q_time] = rep2struct(Q_time);
     [HeartBeats.R_sample] = rep2struct(R_sample);
@@ -385,26 +353,23 @@ if structoutput
         
         plot(data_in.time{1},data_in.trial{1},'k');
         
-        todel = isnan(P_sample);
-        toplot = [P_time(~todel); data_in.trial{1}(P_sample(~todel))];
-        plot(toplot(1,:),toplot(2,:),'.');
         todel = isnan(Q_sample);
         toplot = [Q_time(~todel); data_in.trial{1}(Q_sample(~todel))];
-        plot(toplot(1,:),toplot(2,:),'.');
+        plot(toplot(1,:),toplot(2,:),'.','markersize',10);
         todel = isnan(R_sample);
         toplot = [R_time(~todel); data_in.trial{1}(R_sample(~todel))];
-        plot(toplot(1,:),toplot(2,:),'.');
+        plot(toplot(1,:),toplot(2,:),'.','markersize',10);
         todel = isnan(S_sample);
         toplot = [S_time(~todel); data_in.trial{1}(S_sample(~todel))];
-        plot(toplot(1,:),toplot(2,:),'.');
+        plot(toplot(1,:),toplot(2,:),'.','markersize',10);
         todel = isnan(T_sample);
         toplot = [T_time(~todel); data_in.trial{1}(T_sample(~todel))];
-        plot(toplot(1,:),toplot(2,:),'.');
-        legend({'ECG','P','Q','R','S','T'});
+        plot(toplot(1,:),toplot(2,:),'.','markersize',10);
+        legend({'ECG','Q','R','S','T'});
     end
     clear beats_time
 else
-    HeartBeats = round(R_sample*fsample_ori/cfg.fsample);
+    HeartBeats = R_sample;
 end
 
 function [b] = skipnans(a,idx)
