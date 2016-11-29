@@ -43,6 +43,7 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 %     cfg.thresh          = z-threshold for 1st step detection of R-peaks (default = 10)
 %     cfg.mindist         = minimum inter beat interval in seconds (IBI) (default = 0.35)
 %     cfg.corthresh       = proportion of maximum correlation (default = 0.6)
+%     cfg.PRmax           = maximum duration between P and R peaks in seconds (default = 0.25)
 %     cfg.QRmax           = maximum duration between Q and R peaks in seconds (default = 0.05)
 %     cfg.RSmax           = maxumum duration between R and S peaks in seconds (default = 0.1)
 %     cfg.QTmax           = maximum QT interval in seconds (default = 0.42)
@@ -137,6 +138,7 @@ def.lpfreq          = 100;
 def.thresh          = 10;    % z-threshold for 1st step detection of R-peaks
 def.mindist         = 0.35; % minimum IBI
 def.corthresh       = 0.6;  % proportion of maximum correlation
+def.PRmax           = 0.25;  
 def.QRmax           = 0.05;  
 def.RSmax           = 0.1;
 def.QTmax           = 0.42;
@@ -318,33 +320,45 @@ if cfg.structoutput
     %% find Q S T
     Q_sample = NaN(size(R_sample));S_sample = NaN(size(R_sample));T_sample = NaN(size(R_sample));
     for i_R = 1:numel(R_sample)
-        bnds = max(1,round(R_sample(i_R) - cfg.QRmax * data.fsample)):R_sample(i_R);
-        ECGtmp = ECG(bnds);
+        % Q
+        idx = max(1,round(R_sample(i_R) - cfg.QRmax * data.fsample)):R_sample(i_R);
+        ECGtmp = ECG(idx);
         [v,p] = min(ECGtmp);
-        Q_sample(i_R) = p + bnds(1) - 1;
-        bnds = R_sample(i_R):min(numel(ECG),round(R_sample(i_R) +  cfg.RSmax * data.fsample));
-        ECGtmp = ECG(bnds);
-        [v,p] = min(ECGtmp);
-        S_sample(i_R) = p + bnds(1) - 1;
-        QTmax = 0.42;
-        bnds = S_sample(i_R):min(numel(ECG),round(Q_sample(i_R)+cfg.QTmax*data.fsample));
-        ECGtmp = ECG(bnds);
+        Q_sample(i_R) = p + idx(1) - 1;
+        % P
+        idx = max(1,round(R_sample(i_R) - cfg.PRmax * data.fsample)):Q_sample(i_R);
+        ECGtmp = ECG(idx);
         [v,p] = max(ECGtmp);
-        T_sample(i_R) = p + bnds(1) - 1;
+        P_sample(i_R) = p + idx(1) - 1;
+        % S
+        idx = R_sample(i_R):min(numel(ECG),round(R_sample(i_R) +  cfg.RSmax * data.fsample));
+        ECGtmp = ECG(idx);
+        [v,p] = min(ECGtmp);
+        S_sample(i_R) = p + idx(1) - 1;
+        % T
+        idx = S_sample(i_R):min(numel(ECG),round(Q_sample(i_R)+cfg.QTmax*data.fsample));
+        ECGtmp = ECG(idx);
+        [v,p] = max(ECGtmp);
+        T_sample(i_R) = p + idx(1) - 1;
     end
+    P_time = skipnans(data_in.time{1},P_sample);
     Q_time = skipnans(data_in.time{1},Q_sample);
     R_time = skipnans(data_in.time{1},R_sample);
     S_time = skipnans(data_in.time{1},S_sample);
     T_time = skipnans(data_in.time{1},T_sample);
     
-    [HeartBeats.Q_sample] = rep2struct(Q_sample);
-    [HeartBeats.Q_time] = rep2struct(Q_time);
-    [HeartBeats.R_sample] = rep2struct(R_sample);
-    [HeartBeats.R_time] = rep2struct(R_time);
-    [HeartBeats.S_sample] = rep2struct(S_sample);
-    [HeartBeats.S_time] = rep2struct(S_time);
-    [HeartBeats.T_sample] = rep2struct(T_sample);
-    [HeartBeats.T_time] = rep2struct(T_time);
+    for i = 1:numel(R_sample)
+        HeartBeats(i).P_sample  = P_sample(i);
+        HeartBeats(i).P_time    = P_time(i);
+        HeartBeats(i).Q_sample  = Q_sample(i);
+        HeartBeats(i).Q_time    = Q_time(i);
+        HeartBeats(i).R_sample  = R_sample(i);
+        HeartBeats(i).R_time    = R_time(i);
+        HeartBeats(i).S_sample  = S_sample(i);
+        HeartBeats(i).S_time    = S_time(i);
+        HeartBeats(i).T_sample  = T_sample(i);
+        HeartBeats(i).T_time    = T_time(i);
+    end
     if istrue(cfg.plotfinal) || istrue(cfg.plotall)
         figure;
         hold on
@@ -356,6 +370,9 @@ if cfg.structoutput
         
         plot(data_in.time{1},data_in.trial{1},'k');
         
+        todel = isnan(P_sample);
+        toplot = [P_time(~todel); data_in.trial{1}(P_sample(~todel))];
+        plot(toplot(1,:),toplot(2,:),'.','markersize',10);
         todel = isnan(Q_sample);
         toplot = [Q_time(~todel); data_in.trial{1}(Q_sample(~todel))];
         plot(toplot(1,:),toplot(2,:),'.','markersize',10);
@@ -368,7 +385,7 @@ if cfg.structoutput
         todel = isnan(T_sample);
         toplot = [T_time(~todel); data_in.trial{1}(T_sample(~todel))];
         plot(toplot(1,:),toplot(2,:),'.','markersize',10);
-        legend({'ECG','Q','R','S','T'});
+        legend({'ECG','P','Q','R','S','T'});
     end
     clear beats_time
 else
