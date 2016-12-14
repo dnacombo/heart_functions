@@ -215,7 +215,7 @@ mHB = nanmean(HB,1);
 % we'll assume that signal at dt seconds before detected R-peaks should be
 % lower than R-peaks. dt = 50 ms seems reasonable.
 dt = round(.05 * data.fsample);
-if ~(mean(mHB(HB_bound-5:HB_bound+5)) > mean(mHB(HB_bound - dt:HB_bound - dt + 10)))
+if sign(skewness(ECG)) == -1
     % flip
     ECG = -ECG;
     mHB = -mHB;
@@ -395,6 +395,7 @@ if cfg.structoutput
 else
     HeartBeats = R_sample;
 end
+drawnow
 
 function [b] = skipnans(a,idx)
 
@@ -561,3 +562,103 @@ if nargout>1,
 end
 
 
+function sk = skewness(data)
+x0 = data - nanmean(data);
+s2 = nanmean(data.^2);
+m3 = nanmean(data.^3);
+sk = m3 ./ s2 .^(1.5);
+
+
+
+
+
+
+function h = vline(x,varargin)
+
+% h = vline(x,varargin)
+% add vertical line(s) on the current axes at x
+% optional inputs: 
+%   'ticks', [numeric] : position of ticks on the line
+%   'ticklength', [scalar]: tick length nth of size of the axis
+%                           default = 1/40: ticklength = diff(ylim)/40 
+%   'color', [numeric] : color of the lines. may have as many rows as there are lines.
+% all other varargin arguments are passed to plot...
+
+x = x(:);
+varg = cellfun(@(x)num2str(x),varargin,'uniformoutput',0);
+ticks = cellfun(@(x)strcmp(x,'ticks'),varg);
+ticklength = cellfun(@(x)strcmp(x,'ticklength'),varg);
+if any(ticks)
+    iticks = find(ticks);
+    ticks = varargin{iticks+1};
+    if any(ticklength)
+        iticklength = find(ticklength);
+        ticklength = varargin{iticklength+1};
+        varargin(iticklength:iticklength+1) = [];
+    else
+        ticklength = 1/40;
+    end
+    varargin(iticks:iticks+1) = [];
+    xs = [x - diff(xlim)*ticklength, x + diff(xlim)*ticklength];
+    arrayfun(@(i) line(xs,repmat(ticks(i),size(xs,1),2),'color','k'),1:numel(ticks));
+end
+ho = ishold;
+hold on
+c = cellfun(@(x)strcmp(x,'color'),varg);
+if any(c)
+    cs = varargin{find(c)+1};
+    varargin([find(c),find(c)+1]) = [];
+end
+h = plot([x x]',repmat(ylim,numel(x),1)',varargin{:});
+if any(c)
+    if numel(h) == size(cs,1)
+        for ih = 1:numel(h)
+            set(h(ih),'color',cs(ih,:))
+        end
+    else
+        set(h,'color',cs(1,:))
+    end
+end
+if not(ho)
+    hold off
+end
+if nargout == 0
+    clear h
+end
+
+
+function s = setdef(s,d,keepempty)
+% s = setdef(s,d)
+% s = setdef(s,d,keepempty)
+% Merges the two structures s and d recursively.
+% Adding the default field values from d into s when not present or empty.
+% Keeping order of fields same as in d
+% if keepempty is provided and true, then empty fields in s will be left
+% empty. otherwise they are populated with default values. default is
+% false.
+if not(exist('keepempty','var'))
+    keepempty = 0;
+end
+
+if isstruct(s) && not(isempty(s))
+    if not(isstruct(d))
+        fields = [];
+    else
+        fields = fieldnames(d);
+    end
+    for i_f = 1:numel(fields)
+        if isfield(s,fields{i_f})
+            s.(fields{i_f}) = setdef(s.(fields{i_f}),d.(fields{i_f}),keepempty);
+        else
+            [s.(fields{i_f})] = d.(fields{i_f});
+        end
+    end
+    if not(isempty(fields))
+        fieldsorig = setdiff(fieldnames(s),fields);
+        s = orderfields(s,[fields; fieldsorig]);
+    end
+elseif not(isempty(s)) || keepempty
+    s = s;
+elseif isempty(s)
+    s = d;    
+end
