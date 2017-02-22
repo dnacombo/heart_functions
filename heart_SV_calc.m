@@ -527,6 +527,10 @@ uicontrol('style','pushbutton','string','zoom +',...
     'callback',@zplus,...
     'units','normalize',...
     'position',[.19 .01 .05 .05])
+uicontrol('style','pushbutton','string','OK',...
+    'callback','uiresume(gcf)',...
+    'units','normalize',...
+    'position',[.27 .01 .05 .05])
 
 function data = clip(data,time,cliptime)
 % a simple function to clip a specific time window of data
@@ -586,7 +590,7 @@ iBeat = GD.allout(GD.iout);
 
 dat(1,:) = GD.time;
 dat(2,:) = GD.dZdt;
-nupoint = dsearchn(bsxfun(@times,dat',fac),pos(1,1:2).*fac);
+nupoint = dsearchn(dat(1,:)',pos(1,1));
 nudat = dat(:,nupoint);
 
 switch GD.allout_type(GD.iout)%ceil(closest/numel(GD.HeartBeats))
