@@ -1,0 +1,41 @@
+# Using heart functions
+
+To setup, include the path to the two functions in the MATLAB path. This tool requires FieldTrip (http://www.fieldtriptoolbox.org/)
+
+## Using heart_peak_detect.m
+
+This function reads an electrocardiogram (ECG) data channel and finds R peaks (and others). It returns a structure with fields R_sample and R_time, sample and time points of each heart beat. Other components of the ECG are returned as well following the same scheme.
+
+Data can be read using FieldTrip’s ft_preprocessing function
+
+    cfg                              = [];
+    cfg.dataset                 = 'MERGE_CUT_pilote1_damier_EBI_12_5_kHz_tsss.fif';
+    cfg.channel                 = {'EBI_-_Magnitude' 'ECG1' 'HeartSound'};
+    data_raw                    = ft_preprocessing(cfg);
+
+Detecting heart peaks can be done as follows. All that is needed is an ECG channel (here ‘ECG1’).
+
+    cfg = [];
+    cfg.channel = 'ECG1';
+     
+    [HeartBeats] = heart_peak_detect(cfg,data_raw);
+
+The function can also be called with simpler (legacy, not recommended) method:
+
+    ECG = data_raw.trial{1}(2,:);
+    fs = data.fsample;
+
+    [HeartBeats] = heart_peak_detect(ECG,fs);
+
+The algorithm of the function is as follows:
+The signal is first high and low pass filtered (default 1-100 Hz). The square of the z-scored ECG is computed and a first detection is performed as the peaks passing the cfg.thresh (default 10). Not all R peaks need to be selected at this step. Just enough to create a template heart beat ECG (HB) is necessary. If cfg.plotthresh is true, then a figure is shown, allowing the user to edit the threshold. Then a template HB is computed (shown in a figure if cfg.plotbeat) and convolved with the whole ECG time series. The resulting convolution is normalized to have a maximum of 1 and beats are taken as peaks above cfg.corthresh (cfg.corthresh). 
+In both steps, a minimum distance between beats of cfg.mindist is enforced.
+Other peaks are found based on each R peak. Q is the minimum within 50 ms before R, S is the minimum within 100 ms after R, and T is the maximum between the S peak and a maximum QT interval of 420 ms (a rough standard...).
+If cfg.plotcorr is true, then a figure with all heart beats is shown. The user is asked whether or not they want to change the threshold of the correlation. In last resort, outlier heart beats (based on interbeat interval) can be remodeled. 
+
+
+## Using heart_SV_calc.m
+
+
+
+
