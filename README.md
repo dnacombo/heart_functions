@@ -41,8 +41,6 @@ Stroke volume (SV) can be estimated non invasively based on impedance cardiograp
 
 _Note_: Obtaining a reliable absolute estimate of SV from impedance cardiography is difficult, and several important parameters are to be tuned. Obtaining a reliable relative estimate is easy using this function. In other words, relative changes in SV across heart beats within one recording in one subject are reliable. The absolute volume (in mL) is provided as indication and does not correspond to a reliable estimate. This function should by no means be used directly for clinical diagnostic.
 
-    %% Stroke volume
-    % Simplest call without any feedback
     cfg = [];
     cfg.interactive = 'no';
     cfg.L = L;
@@ -50,7 +48,9 @@ _Note_: Obtaining a reliable absolute estimate of SV from impedance cardiography
     [HeartBeats] = heart_SV_calc(cfg,data_raw);
 
 Retrieve SV with
+
 	[HeartBeats.SV]
+
 Use feedback to remove outliers
  
     cfg = [];
@@ -62,4 +62,8 @@ The feedback window that opens exploits the expected regularity of the cardiac c
 
 A figure thus opens, with the time course of the ECG, impedance (Z0), its temporal derivative (dZ/dt) and heart sounds (if available). The times of opening and closing of the aortic valve (often referred to as the B and X point, respectively) are estimated on the dZ/dt trace at each cycle (black vertical lines). The time between X and B is called left ventricular ejection time (LVET).
 
+[Figure](Docs/SV_figure1.png)
+
+
 The distributions of R peak to B point, dZdt_max to X point, and LVET are computed and outliers to these distributions are inspected. The user may click on the trace to move the estimated time of a given outlier.
+
