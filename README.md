@@ -2,7 +2,7 @@
 
 To setup, include the path to the two functions in the MATLAB path. This tool requires FieldTrip (http://www.fieldtriptoolbox.org/)
 
-## Using heart_peak_detect.m
+## Using heart_peak_detect.m
 
 This function reads an electrocardiogram (ECG) data channel and finds R peaks (and others). It returns a structure with fields R_sample and R_time, sample and time points of each heart beat. Other components of the ECG are returned as well following the same scheme.
 
