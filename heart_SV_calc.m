@@ -461,7 +461,8 @@ ytick(yt(end:-1:1))
 yticklabel(ytl(end:-1:1))
 
 set(gca,'ButtonDownFcn',@editpeaks);
-title(sprintf('Outlier %d / %d',GD.iout,numel(GD.allout)));
+bx = {'B point' 'X point'};
+title(sprintf('Outlier %d / %d (%s, heart beat #%d)',GD.iout,numel(GD.allout),bx{GD.allout_type(GD.iout)},GD.allout(GD.iout)));
 
 % add boxplots
 ax = [GD.axB GD.axX];
