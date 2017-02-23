@@ -67,3 +67,11 @@ A figure thus opens, with the time course of the ECG, impedance (Z0), its tempor
 
 The distributions of R peak to B point, dZdt_max to X point, and LVET are computed and outliers to these distributions are inspected (red vertical line). The user may click on the trace to move the estimated time of a given outlier.
 
+The figure below shows how the B and X points should be located wrt impedance changes. Note that the B point can be mapped to the end of the first sound of the cardiac cycle (S1), whereas the X point can be mapped to the beginning of the second sound (S2).
+
+
+![Figure](Docs/cardiac-cycle_signals.jpg)
+
+See also [Using_heart_functions.m](Using_heart_functions.m)
+
+
