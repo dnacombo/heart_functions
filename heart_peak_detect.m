@@ -263,6 +263,7 @@ while istrue(cfg.plotcorr) || istrue(cfg.plotall)
     s1 = questdlg('Would you like to change the threshold?');
     switch s1
         case 'Yes'
+            subplot(211)
             [dum,thresh] = ginput(1);
             [R_sample, R_value] = peakseek(cr(1001:end-1000), thresh, data.fsample .* cfg.mindist);
         case 'No'
@@ -279,6 +280,7 @@ while istrue(cfg.plotcorr) || istrue(cfg.plotall)
         case 'Yes'
             axes(findobj(gcf,'tag','hhist'))
             title('click minimal bound of correct IBI')
+            subplot(223)
             [lw,~] = ginput(1);
             title('click maximal bound of correct IBI')
             [hg,~] = ginput(1);
