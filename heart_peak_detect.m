@@ -59,6 +59,14 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 %     cfg.plotfinal       = open a figure to show final results with all peaks found (default = 'no')
 %     cfg.plotall         = whether to do all of the above (default = 'no')
 %
+%   - Tweaks/Fixes:
+%     cfg.FixSlarger      = introduce a fix to allow detecting R peaks when
+%                           the S peak is larger in absolute amplitude than
+%                           the R peak (rare). If FixSlarger is > 0, all
+%                           positive values in the ECG are removed before
+%                           detection of R peaks. If FixSlarger is < 0,
+%                           negative values are removed. Nothing is changed
+%                           if FixSlarger == 0 (default).
 %   Algorithm:
 %
 %   The signal is first high and low pass filtered (default 1-100 Hz). The
@@ -152,6 +160,7 @@ def.plotthresh      = 0;
 def.plotbeat        = 0;
 def.plotcorr        = 0;
 def.plotfinal       = 0;
+def.FixSlarger      = 0;
 
 cfg = setdef(cfg,def);
 
@@ -172,8 +181,16 @@ time = data.time{1};
 
 %% find R peaks
 
+% Fix when S peaks are larger than R peaks in absolute value.
+tmp = ECG;
+if cfg.FixSlarger > 0
+    tmp(ECG>0) = NaN;
+elseif cfg.FixSlarger < 0
+    tmp(ECG<0) = NaN;
+end
+
 % standardize ecg
-ECG2z = nanzscore(ECG).^2;
+ECG2z = nanzscore(tmp).^2;
 
 thresh = cfg.thresh; % default z-threshold
 [R_sample, R_value] = peakseek(ECG2z, thresh, data.fsample .* cfg.mindist);
