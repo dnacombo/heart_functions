@@ -353,7 +353,11 @@ if ~isempty(HeartSoundz)
     GD.HeartSoundzscale = cfg.sound.scale;
 end
 GD.HeartBeats = HeartBeats;
-GD.iout = 1;
+if isfield(cfg,'iout')
+    GD.iout = cfg.iout;
+else
+    GD.iout = 1;
+end
 GD.LVE_ori = [GD.HeartBeats.B_time ;GD.HeartBeats.X_time]' - [GD.HeartBeats.R_time ;GD.HeartBeats.dZdt_max_time]';
 
 [ioutliers] = find_outliers(GD.LVE_ori);
