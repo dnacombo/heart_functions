@@ -475,7 +475,7 @@ LVE = [GD.HeartBeats.B_time ;GD.HeartBeats.X_time]' - [GD.HeartBeats.R_time ;GD.
 % boxplot for B points
 axes(GD.axB)
 if isempty(findobj(gca,'tag','Box'))
-    boxplot(LVE(:,1),'plotstyle','compact','orientation','horizontal','symbol','')
+    boxplot(LVE(:,1),'plotstyle','compact','orientation','horizontal','symbol','o','jitter',.2)
 end
 hold on;
 ytick([1]);
@@ -484,7 +484,7 @@ title('R peak to B point')
 % boxplot for X points
 axes(GD.axX)
 if isempty(findobj(gca,'tag','Box'))
-    boxplot(LVE(:,2),'plotstyle','compact','orientation','horizontal','symbol','')
+    boxplot(LVE(:,2),'plotstyle','compact','orientation','horizontal','symbol','o','jitter',.2)
 end
 hold on;
 title('dZdt_{max} to X point')
@@ -495,17 +495,11 @@ try delete(GD.scatiout); end
     
 axes(ax(GD.allout_type(GD.iout)));
 GD.scatout = scatter(LVE(GD.allout(GD.iout),GD.allout_type(GD.iout)),1,'MarkerFaceColor','r','MarkerEdgeColor','none');
-for iout = 1:numel(GD.allout)
-    cb = {@go,iout};
-    axes(ax(GD.allout_type(iout)));
-    GD.scatiout(iout) = scatter(LVE(GD.allout(iout),GD.allout_type(iout)),1,'MarkerEdgeColor','b','ButtonDownFcn',cb);
-end
-
 % add LVET boxplot
 LVET = diff(LVE,[],2);
 axes(GD.axLVET);
 cla
-boxplot(LVET,'plotstyle','compact','orientation','horizontal','jitter',0)
+boxplot(LVET,'plotstyle','compact','orientation','horizontal','jitter',0.2)
 hold on;
 scatter(LVET(GD.allout(GD.iout)),1,'MarkerFaceColor','r','MarkerEdgeColor','none');
 title('LVET')
@@ -683,7 +677,7 @@ if minpeakdist>1
     end
 end
 
-if nargout>1,
+if nargout>1
     pks=x(locs);
 end
 function sk = skewness(data)
