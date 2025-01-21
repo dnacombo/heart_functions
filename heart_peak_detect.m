@@ -53,11 +53,11 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 %     cfg.QTmax           = maximum QT interval in seconds (default = 0.42)
 %
 %   - Plotting options:
-%     cfg.plotthresh      = open a figure to modify the threshold (default = 'no')
-%     cfg.plotbeat        = open a figure to show the average ECG around R peak (default = 'no')
-%     cfg.plotcorr        = open a figure to show the correlation level along the recording and enable editing threshold correlation (default = 'no')
-%     cfg.plotfinal       = open a figure to show final results with all peaks found (default = 'no')
-%     cfg.plotall         = whether to do all of the above (default = 'no')
+%     cfg.plotthresh      = open a figure to modify the threshold (default = 'yes')
+%     cfg.plotbeat        = open a figure to show the average ECG around R peak (default = 'yes')
+%     cfg.plotcorr        = open a figure to show the correlation level along the recording and enable editing threshold correlation (default = 'yes')
+%     cfg.plotfinal       = open a figure to show final results with all peaks found (default = 'yes')
+%     cfg.plotall         = whether to do all of the above (default = 'yes')
 %
 %   - Tweaks/Fixes:
 %     cfg.FixSlarger      = introduce a fix to allow detecting R peaks when
@@ -107,6 +107,14 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 
 % v0 Maximilien Chaumon November 2016
 % based on previously undocumented anonymous version
+%%% v1 Modif by Anne Buot Mars 2017
+% modif visu outliers, ploting default option is yes
+% debug addition/removal of new R-peaks: both the R-sample and R-value are updated
+% debug update the IBI histogram after addition/removal of R-peaks
+%%% v2 Modif by Anne Buot November 2019
+% modifications to deal with unusual ECG waveforms such as:
+% - S peak > R peak : in this case, the z-scored ECG is not squared
+% - R peak < T peak : in this case a double-threshold selection is performed
 
 narginchk(1,2)
 if isnumeric(cfg) && ~isempty(cfg) % first input method
@@ -125,7 +133,7 @@ if isnumeric(cfg) && ~isempty(cfg) % first input method
     cfg = [];
     cfg.structouput = 0;
 elseif isstruct(cfg) || isempty(cfg) % second input method
-    if nargin == 1 
+    if nargin == 1
         data = ft_preprocessing(cfg);
     elseif nargin == 2
         if isnumeric(data)% data input as vector
@@ -163,20 +171,22 @@ def.hpfreq          = 1;    % low bound of high pass filter of ECG
 def.hpfilttype      = 'firws';
 def.lpfilter        = 'yes';
 def.lpfilttype      = 'firws';
-def.lpfreq          = 100;
-def.thresh          = 10;    % z-threshold for 1st step detection of R-peaks
+def.lpfreq          = 40;
+def.lpfiltord       = 4;
+def.hpfiltord       = 4;
+def.thresh          = 10;   % z-threshold for 1st step detection of R-peaks
 def.mindist         = 0.35; % minimum IBI
 def.corthresh       = 0.6;  % proportion of maximum correlation
-def.PRmax           = 0.25;  
-def.QRmax           = 0.05;  
+def.PRmax           = 0.25;
+def.QRmax           = 0.05;
 def.RSmax           = 0.1;
 def.QTmax           = 0.42;
-def.structoutput    = 1; 
-def.plotall         = 0;
-def.plotthresh      = 0;
-def.plotbeat        = 0;
-def.plotcorr        = 0;
-def.plotfinal       = 0;
+def.structoutput    = 1;
+def.plotall         = 1;
+def.plotthresh      = 1;
+def.plotbeat        = 1;
+def.plotcorr        = 1;
+def.plotfinal       = 1;
 def.FixSlarger      = 0;
 
 cfg = setdef(cfg,def);

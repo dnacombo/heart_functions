@@ -1,4 +1,4 @@
-function HeartBeats = heart_SV_calc(cfg,data,HeartBeats)
+function HeartBeats = heart_SV_calc(cfg,L,data,HeartBeats)
 
 % [HeartBeats] = heart_SV_calc(cfg)
 % [HeartBeats] = heart_SV_calc(cfg,data)
@@ -45,8 +45,8 @@ function HeartBeats = heart_SV_calc(cfg,data,HeartBeats)
 %         cfg.QCmax           = maximal duration of the QC interval in seconds (default = .3)
 %         cfg.RS1max          = maximal time interval between R peak and S1 in seconds (default = .2)
 %         cfg.LVETmax         = maximal left ventricular ejection time in seconds (default = .4)
-%         cfg.LVE_startfracmax_dZdt = fraction of maximum dZdt value to use to detect ejection start (default = 0.15, Kubicek, W. G., R. P. Patterson, and D. A. Witsoe. “Impedance Cardiography as a Noninvasive Method of Monitoring Cardiac Function and Other Parameters of the Cardiovascular System*.” Annals of the New York Academy of Sciences 170, no. 2 (July 1, 1970): 724–32)
-%         cfg.rho             = resistivity of blood in Ohms (default = 135, see Berntson, Gary G., Karen S. Quigley, and Dave Lozano. “Cardiovascular Psychophysiology.” Handbook of Psychophysiology 3 (2007): 182–210.)
+%         cfg.LVE_startfracmax_dZdt = fraction of maximum dZdt value to use to detect ejection start (default = 0.15, Kubicek, W. G., R. P. Patterson, and D. A. Witsoe. “Impedance Cardiography as a Noninvasive Method of Monitoring Cardiac Function and Other Parameters of the Cardiovascular System*.�? Annals of the New York Academy of Sciences 170, no. 2 (July 1, 1970): 724–32)
+%         cfg.rho             = resistivity of blood in Ohms (default = 135, see Berntson, Gary G., Karen S. Quigley, and Dave Lozano. “Cardiovascular Psychophysiology.�? Handbook of Psychophysiology 3 (2007): 182–210.)
 %         cfg.L               = distance between the two middle electrodes in cm (default = 30)
 % 
 %     - Ploting options:
@@ -84,25 +84,8 @@ function HeartBeats = heart_SV_calc(cfg,data,HeartBeats)
 %               SV = rho .* L .^ 2 ./ Z .^ 2 .* LVET .* dZdt_max
 % 
 
-% heart_functions is a program meant to detect heart beats in an electrocardiogram and compute stroke volume.
-%
-%    Copyright (C) 2019  Maximilien Chaumon
-%
-%    This program is free software: you can redistribute it and/or modify
-%    it under the terms of the GNU General Public License as published by
-%    the Free Software Foundation, either version 3 of the License, or
-%    (at your option) any later version.
-%
-%    This program is distributed in the hope that it will be useful,
-%    but WITHOUT ANY WARRANTY; without even the implied warranty of
-%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-%    GNU General Public License for more details.
-%
-%    You should have received a copy of the GNU General Public License
-%    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 % v0 Maximilien Chaumon November 2016
-
+% v1 Modif Anne to take into account varying L value (default was set at 30cm)
 
 def             = [];
 def.ECG.channel = 'ECG1';
@@ -112,7 +95,7 @@ def.ECG.show    = 'yes';
 def.ECG_peakcfg = [];
 def.ECG_peakcfg.channel = def.ECG.channel;
 
-def.Z0.channel  = 'EBI_-_Magnitude';
+def.Z0.channel = 'z';
 def.Z0.scale    = [];
 def.Z0.lpfilter = 'yes';
 def.Z0.lpfreq   = 15;
@@ -127,12 +110,12 @@ def.sound.bpfilter = 'yes';
 def.sound.bpfreq = [40 60];
 def.sound.tubelength = 152;
 
-def.QCmax       = .3;
+def.QCmax       = .4;
 def.RS1max      = .2;
 def.LVETmax     = .4;
 def.LVE_startfracmax_dZdt = 0.15;
-def.rho         = 135;
-def.L           = 30;
+def.rho         = 135;  % 147 in biopac doc / 135 in Berntson's paper
+def.L           = L;
 def.SV          = @(rho,L,Z,LVET,dZdt_max) rho .* L .^ 2 ./ Z .^ 2 .* LVET .* dZdt_max;
 
 def.plotallmeas = 'no';
@@ -181,6 +164,7 @@ cfg.ECG_peakcfg.fsample = data.fsample;
 if ~exist('HeartBeats','var')
     [HeartBeats] = heart_peak_detect(cfg.ECG_peakcfg,data);
 end
+
 % remove last HB to be sure we have a full cycle after last HB
 lastHB = HeartBeats(end);% we keep this to NaN signal after this point
 ECG(lastHB.R_sample:end) = NaN;
@@ -244,6 +228,8 @@ for i_R = 1:numel(HeartBeats)
     Q = HeartBeats(i_R).Q_sample;
     idx = Q:Q + cfg.QCmax * data.fsample;
     dZdttmp = dZdt(idx);
+    % hack anne to correct baseline
+    dZdttmp = dZdttmp - mean(dZdttmp(1,1:50));
     % find dZdtmax
     [v,p] = max(dZdttmp);
     dZdt_max_value(i_R) = v;
@@ -378,6 +364,14 @@ end
 GD.LVE_ori = [GD.HeartBeats.B_time ;GD.HeartBeats.X_time]' - [GD.HeartBeats.R_time ;GD.HeartBeats.dZdt_max_time]';
 
 [ioutliers] = find_outliers(GD.LVE_ori);
+[i3outliers] = find_outliers([GD.HeartBeats.LVET_sample]');
+for indout = 1:max(size(i3outliers))
+    if i3outliers(indout) == 1
+        ioutliers(indout,:) = 1;
+    end
+end
+
+
 [GD.allout,GD.allout_type] = find(ioutliers);
 
 guidata(hfig,GD);
@@ -512,6 +506,13 @@ try delete(GD.scatiout); end
     
 axes(ax(GD.allout_type(GD.iout)));
 GD.scatout = scatter(LVE(GD.allout(GD.iout),GD.allout_type(GD.iout)),1,'MarkerFaceColor','r','MarkerEdgeColor','none');
+% for iout = 1:numel(GD.allout)
+%     cb = {@go,iout};
+% GD.allout_type == 1
+%     axes(ax(GD.allout_type(iout)));
+%     GD.scatiout = scatter(LVE(GD.allout,GD.allout_type),1,'MarkerEdgeColor','b');%,'ButtonDownFcn',cb
+% end
+% set(GD.scatiout,'visible','on');
 % add LVET boxplot
 LVET = diff(LVE,[],2);
 axes(GD.axLVET);
@@ -702,6 +703,7 @@ x0 = data - nanmean(data);
 s2 = nanmean(data.^2);
 m3 = nanmean(data.^3);
 sk = m3 ./ s2 .^(1.5);
+
 function [nb,channame,strnames] = chnb(channame, varargin)
 
 % chnb() - return channel number corresponding to channel names in an EEG
