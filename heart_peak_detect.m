@@ -191,6 +191,7 @@ tmp.hpfilttype  = cfg.hpfilttype;
 tmp.lpfilter    = cfg.lpfilter;
 tmp.lpfreq      = cfg.lpfreq;
 tmp.lpfilttype  = cfg.lpfilttype;
+tmp.feedback    = 'none';
 data            = ft_preprocessing(tmp,data);
 
 ECG = data.trial{1};
