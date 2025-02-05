@@ -144,6 +144,7 @@ elseif isstruct(cfg) || isempty(cfg) % second input method
             cfg = rmfield(cfg,'fsample');
         elseif isstruct(ft_checkdata(data,'datatype','raw'))
             if isfield(cfg,'channel')
+                cfg.feedback = 'none';
                 data = ft_preprocessing(cfg,data);
             end
             if not(isvector(data.trial{1}))
