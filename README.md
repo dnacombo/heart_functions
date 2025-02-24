@@ -75,3 +75,4 @@ The figure below shows how the B and X points should be located wrt impedance ch
 See also [Using_heart_functions.m](Using_heart_functions.m)
 
 
+[Heart Functions](https://github.com/dnacombo/heart_functions) by Maximilien Chaumon is licensed under [CC BY-NC-SA 4.0![](https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1)![](https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1)![](https://mirrors.creativecommons.org/presskit/icons/nc.svg?ref=chooser-v1)![](https://mirrors.creativecommons.org/presskit/icons/sa.svg?ref=chooser-v1)](https://creativecommons.org/licenses/by-nc-sa/4.0/?ref=chooser-v1)
