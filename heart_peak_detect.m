@@ -290,6 +290,7 @@ ecg_n = ECG./max(ECG); % normalized ecg
 
 % pad ecg
 ecg_pad = [zeros(1,1000) ECG zeros(1,1000)];
+ecg_pad(isnan(ecg_pad)) = 0;
 cr = zeros(size(ecg_pad));
 
 % compute correlation
