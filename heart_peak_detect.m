@@ -201,6 +201,9 @@ tmp.lpfilttype  = cfg.lpfilttype;
 tmp.feedback    = 'none';
 data            = ft_preprocessing(tmp,data);
 
+if numel(data.trial) > 1
+    error('data should have one trial only.')
+end
 ECG = data.trial{1};
 time = data.time{1};
 
