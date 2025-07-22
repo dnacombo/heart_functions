@@ -366,7 +366,7 @@ end
 
 if cfg.structoutput
     %% find Q S T
-    Q_sample = NaN(size(R_sample));S_sample = NaN(size(R_sample));T_sample = NaN(size(R_sample));
+    P_sample = NaN(size(R_sample));Q_sample = NaN(size(R_sample));S_sample = NaN(size(R_sample));T_sample = NaN(size(R_sample));
     for i_R = 1:numel(R_sample)
         % Q
         idx = max(1,round(R_sample(i_R) - cfg.QRmax * data.fsample)):R_sample(i_R);
