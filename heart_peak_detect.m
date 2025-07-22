@@ -429,6 +429,9 @@ if cfg.structoutput
         HeartBeats(i).T_sample  = T_sample(i);
         HeartBeats(i).T_time    = T_time(i);
     end
+    HeartBeats(1).sk = skewness(cr);
+    HeartBeats(1).ku = kurtosis(cr);
+
     if istrue(cfg.plotfinal) || istrue(cfg.plotall)
         figure;
         hold on
