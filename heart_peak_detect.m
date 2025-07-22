@@ -68,6 +68,8 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data, varargin)
 %                           detection of R peaks. If FixSlarger is < 0,
 %                           negative values are removed. Nothing is changed
 %                           if FixSlarger == 0 (default).
+%      cfg.absPT          = if true, take absolute value of ECG when
+%                           looking for P and T waves
 %   Algorithm:
 %
 %   The signal is first high and low pass filtered (default 1-100 Hz). The
@@ -185,6 +187,7 @@ def.plotbeat        = 0;
 def.plotcorr        = 0;
 def.plotfinal       = 0;
 def.FixSlarger      = 0;
+def.absPT           = 0;
 
 cfg = setdef(cfg,def);
 
@@ -293,6 +296,10 @@ ecg_pad = [zeros(1,1000) ECG zeros(1,1000)];
 ecg_pad(isnan(ecg_pad)) = 0;
 cr = zeros(size(ecg_pad));
 
+if cfg.abstemplate
+    ecg_pad = abs(ecg_pad);
+end
+
 % compute correlation
 for ii=1:length(ecg_pad)-length(mHB)
     cr(ii+round(length(mHB)/2)-1) = sum(ecg_pad(ii:ii+length(mHB)-1).*mHB)./numel(mHB);
@@ -380,6 +387,9 @@ if cfg.structoutput
         % P
         idx = max(1,round(R_sample(i_R) - cfg.PRmax * data.fsample)):Q_sample(i_R);
         ECGtmp = ECG(idx);
+        if cfg.absPT
+            ECGtmp = abs(ECGtmp);
+        end
         [v,p] = max(ECGtmp);
         P_sample(i_R) = p + idx(1) - 1;
         % S
@@ -390,6 +400,9 @@ if cfg.structoutput
         % T
         idx = S_sample(i_R):min(numel(ECG),round(Q_sample(i_R)+cfg.QTmax*data.fsample));
         ECGtmp = ECG(idx);
+        if cfg.absPT
+            ECGtmp = abs(ECGtmp);
+        end
         [v,p] = max(ECGtmp);
         T_sample(i_R) = p + idx(1) - 1;
     end
