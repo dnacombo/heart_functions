@@ -1,6 +1,6 @@
-function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
+function [HeartBeats, R_time] = heart_peak_detect(cfg,data, varargin)
 
-% [R_sample, R_time] = heart_peak_detection(ECG,fs)
+% [R_sample, R_time] = heart_peak_detection(ECG,fs [, cfg])
 % 
 % Simplified calling method. Not recommended. See second input method below.
 %
@@ -8,6 +8,7 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 % Inputs:
 %       ECG         vector of ECG data
 %       fs          sampling frequency
+%       cfg (optional) configuration (see below)
 % Outputs:
 %       R_sample    samples where beats have been detected.
 %       R_time      time points where beats have been detected (assuming
@@ -108,7 +109,7 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data)
 % v0 Maximilien Chaumon November 2016
 % based on previously undocumented anonymous version
 
-narginchk(1,2)
+narginchk(1,3)
 if isnumeric(cfg) && ~isempty(cfg) % first input method
     if not(isvector(cfg))
         error('ECG should be a one channel vector of data');
@@ -122,8 +123,13 @@ if isnumeric(cfg) && ~isempty(cfg) % first input method
     data.label = {'ECG'};
     data.trial = {cfg(:)'};
     data.time = {linspace(0,size(data.trial{1},2)/fs,size(data.trial{1},2))};
-    cfg = [];
-    cfg.structouput = 0;
+    data.sampleinfo = [1 numel(data.time{1})];
+    if nargin == 3
+        cfg = varargin{1};
+    else
+        cfg = [];
+        cfg.structouput = 0;
+    end
 elseif isstruct(cfg) || isempty(cfg) % second input method
     if nargin == 1 
         data = ft_preprocessing(cfg);
