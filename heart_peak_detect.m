@@ -295,7 +295,7 @@ cr = zeros(size(ecg_pad));
 
 % compute correlation
 for ii=1:length(ecg_pad)-length(mHB)
-    cr(ii+round(length(mHB)/2)-1) = sum(ecg_pad(ii:ii+length(mHB)-1).*mHB);
+    cr(ii+round(length(mHB)/2)-1) = sum(ecg_pad(ii:ii+length(mHB)-1).*mHB)./numel(mHB);
 end
 cr = cr./max(cr); % normalize correlation to 1
 
