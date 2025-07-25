@@ -1,7 +1,7 @@
 function [HeartBeats, R_time] = heart_peak_detect(cfg,data, varargin)
 
 % [R_sample, R_time] = heart_peak_detection(ECG,fs [, cfg])
-% 
+%
 % Simplified calling method. Not recommended. See second input method below.
 %
 % Detect R peaks in ECG data sampled at fs Hz.
@@ -15,7 +15,7 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data, varargin)
 %                   time starts at 0)
 %
 % Second input method:
-% 
+%
 % [HeartBeats] = heart_peak_detect(cfg)
 % [HeartBeats] = heart_peak_detect(cfg,data)
 %
@@ -34,7 +34,7 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data, varargin)
 %
 % In either case, the configuration options below apply.
 %
-% 
+%
 % The options are specified with
 %   - Preprocessing options:
 %     cfg.hpfilter        = 'no' or 'yes'  highpass filter (default = 'yes')
@@ -70,6 +70,12 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data, varargin)
 %                           if FixSlarger == 0 (default).
 %      cfg.absPT          = if true, take absolute value of ECG when
 %                           looking for P and T waves
+%      cfg.abstemplate    = use the absolute value of the template before
+%                           running the correlation.
+%      cfg.NaNST          = turn the S-T intervals of the correlation time
+%                           course before computing skewness and kurtosis.
+%                           
+%
 %   Algorithm:
 %
 %   The signal is first high and low pass filtered (default 1-100 Hz). The
@@ -89,7 +95,7 @@ function [HeartBeats, R_time] = heart_peak_detect(cfg,data, varargin)
 %   ms before R, S is the minimum within 100 ms after R, and T is the
 %   maximum between the S peak and a maximum QT interval of 420 ms (a rough
 %   standard...).
-%  
+%
 
 % heart_functions is a program meant to detect heart beats in an electrocardiogram and compute stroke volume.
 %
@@ -133,7 +139,7 @@ if isnumeric(cfg) && ~isempty(cfg) % first input method
         cfg.structouput = 0;
     end
 elseif isstruct(cfg) || isempty(cfg) % second input method
-    if nargin == 1 
+    if nargin == 1
         data = ft_preprocessing(cfg);
     elseif nargin == 2
         if isnumeric(data)% data input as vector
@@ -176,11 +182,11 @@ def.lpfreq          = 100;
 def.thresh          = 10;    % z-threshold for 1st step detection of R-peaks
 def.mindist         = 0.35; % minimum IBI
 def.corthresh       = 0.6;  % proportion of maximum correlation
-def.PRmax           = 0.25;  
-def.QRmax           = 0.05;  
+def.PRmax           = 0.25;
+def.QRmax           = 0.05;
 def.RSmax           = 0.1;
 def.QTmax           = 0.42;
-def.structoutput    = 1; 
+def.structoutput    = 1;
 def.plotall         = 0;
 def.plotthresh      = 0;
 def.plotbeat        = 0;
@@ -188,6 +194,8 @@ def.plotcorr        = 0;
 def.plotfinal       = 0;
 def.FixSlarger      = 0;
 def.absPT           = 0;
+def.NaNST           = 0;
+def.abstemplate     = 0;
 
 cfg = setdef(cfg,def);
 
@@ -234,9 +242,9 @@ while istrue(cfg.plotthresh) || istrue(cfg.plotall)
     xlabel('samples');
     ylabel('zscore');
     zoom;
-    
+
     title(sprintf(['Creating a template HB\nWe should have enough HB (don''t need all)\nclick to change threshold\nright-click to confirm'], thresh));
-    
+
     [x,y,but] = ginput(1);
     if ~isempty(but) && but > 1
         break
@@ -327,7 +335,7 @@ while istrue(cfg.plotcorr) || istrue(cfg.plotall)
 end
 while istrue(cfg.plotcorr) || istrue(cfg.plotall)
     plotIBI(ecg_n,cr,R_sample,R_value,thresh,IBI_s);
-    
+
     s2 = questdlg('Are there still outliers present? ');
     switch s2
         case 'Yes'
@@ -411,7 +419,7 @@ if cfg.structoutput
     R_time = skipnans(data_in.time{1},R_sample);
     S_time = skipnans(data_in.time{1},S_sample);
     T_time = skipnans(data_in.time{1},T_sample);
-    
+
     HeartBeats = struct('P_sample',{},'P_time',{},...
         'Q_sample',{},'Q_time',{},...
         'R_sample',{},'R_time',{},...
@@ -429,8 +437,14 @@ if cfg.structoutput
         HeartBeats(i).T_sample  = T_sample(i);
         HeartBeats(i).T_time    = T_time(i);
     end
-    HeartBeats(1).sk = skewness(cr);
-    HeartBeats(1).ku = kurtosis(cr);
+    if cfg.NaNST
+        for i = 1:numel(R_sample)
+            idx = S_sample(i):min(numel(ECG),round(Q_sample(i)+cfg.QTmax*data.fsample));
+            cr(idx+1000) = NaN;
+        end
+    end
+    HeartBeats(1).sk = skewness(cr(1001:end-1000));
+    HeartBeats(1).ku = kurtosis(cr(1001:end-1000));
 
     if istrue(cfg.plotfinal) || istrue(cfg.plotall)
         figure;
@@ -440,9 +454,9 @@ if cfg.structoutput
             0.8000         0         0
             0    0.7500    0.7500
             0.7500         0    0.7500]);
-        
+
         plot(data_in.time{1},data_in.trial{1},'k');
-        
+
         todel = isnan(P_sample);
         toplot = [P_time(~todel); data_in.trial{1}(P_sample(~todel))];
         plot(toplot(1,:),toplot(2,:),'.','markersize',10);
@@ -474,7 +488,7 @@ for i = 1:numel(idx)
         b(i) = a(idx(i));
     end
 end
-        
+
 
 function plotIBI(ecg_n,cr,p,v,thresh,IBI_s)
 figure(47894);clf
@@ -646,10 +660,10 @@ function h = vline(x,varargin)
 
 % h = vline(x,varargin)
 % add vertical line(s) on the current axes at x
-% optional inputs: 
+% optional inputs:
 %   'ticks', [numeric] : position of ticks on the line
 %   'ticklength', [scalar]: tick length nth of size of the axis
-%                           default = 1/40: ticklength = diff(ylim)/40 
+%                           default = 1/40: ticklength = diff(ylim)/40
 %   'color', [numeric] : color of the lines. may have as many rows as there are lines.
 % all other varargin arguments are passed to plot...
 
@@ -729,5 +743,5 @@ if isstruct(s) && not(isempty(s))
 elseif not(isempty(s)) || keepempty
     s = s;
 elseif isempty(s)
-    s = d;    
+    s = d;
 end
